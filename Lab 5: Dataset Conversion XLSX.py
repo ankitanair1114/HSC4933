@@ -5,8 +5,8 @@
 # Import Libraries
 import pandas as pd
 
-# open the .csv
+# Open the .csv
 df = pd.read_csv("Maternal Health Risk Data Set.csv")
 
-# save it as a .xlsx
+# Save it as a .xlsx
 df.to_excel("Maternal Health Risk Data Set.xlsx", index=False)
