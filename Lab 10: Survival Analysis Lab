@@ -1,1 +1,244 @@
+# HSC 4933 Lab 10: Survival Analysis #
+# Ankita Nair #
+
+# Imports
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from lifelines import KaplanMeierFitter, CoxPHFitter
+from lifelines.statistics import logrank_test
+
+# Specify Data File Path
+
+csv_file_path = "km_logrank_readmission.csv"
+
+# Specify Column Names
+
+time_column = "time_days"
+event_column = "readmitted"
+group_column = "treatment_group"
+
+# Load Data
+
+df = pd.read_csv(csv_file_path)
+
+# Initialize the fitter
+
+kmf = KaplanMeierFitter()
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot Curves and Perform Log-Rank Test
+
+for group_name, group_df in df.groupby(group_column):
+
+    kmf.fit(
+        durations=group_df[time_column],
+        event_observed=group_df[event_column],
+        label=f"Group: {group_name}",
+    )
+
+    kmf.plot_survival_function(ax=ax, show_censors=True)
+
+
+# Separate treatment groups
+
+group_true = df[df[group_column] == "Standard care"]
+group_false = df[df[group_column] == "Telehealth follow-up"]
+
+# Perform log-rank test
+
+logrank_result = logrank_test(
+    durations_A=group_true[time_column],
+    durations_B=group_false[time_column],
+    event_observed_A=group_true[event_column],
+    event_observed_B=group_false[event_column],
+)
+
+# Display Results
+
+print("\nLog-Rank Test: Treatment Groups")
+print(f"n (Standard care) = {len(group_true)}")
+print(f"n (Telehealth follow-up) = {len(group_false)}")
+print(f"Test statistic = {logrank_result.test_statistic:.4f}")
+print(f"p-value = {logrank_result.p_value:.4g}")
+
+
+# Plot Formatting
+
+plt.title("Kaplan-Meier Survival: Treatment Groups", fontsize=16)
+plt.xlabel("Time (Days)", fontsize=12)
+plt.ylabel("Readmission-Free Survival Probability", fontsize=12)
+plt.xlim(0, 180)
+plt.ylim(0, 1.05)
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.legend(loc="lower left")
+plt.tight_layout()
+
+# Save Plot
+
+plt.savefig("kaplan_meier_treatment.png", dpi=300)
+
+# Display Plot
+
+plt.show()
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot Curves
+
+for group_name, group_df in df.groupby("sex"):
+
+    kmf.fit(
+        durations=group_df[time_column],
+        event_observed=group_df[event_column],
+        label=f"Sex: {group_name}",
+    )
+
+    kmf.plot_survival_function(ax=ax, show_censors=True)
+
+
+# Separate sex groups
+
+sex_groups = df["sex"].unique()
+
+group_A = df[df["sex"] == sex_groups[0]]
+group_B = df[df["sex"] == sex_groups[1]]
+
+# Perform log-rank test
+
+sex_result = logrank_test(
+    durations_A=group_A[time_column],
+    durations_B=group_B[time_column],
+    event_observed_A=group_A[event_column],
+    event_observed_B=group_B[event_column],
+)
+
+# Display Results
+
+print("\nLog-Rank Test: Sex")
+print(f"n (Group A) = {len(group_A)}")
+print(f"n (Group B) = {len(group_B)}")
+print(f"Test statistic = {sex_result.test_statistic:.4f}")
+print(f"p-value = {sex_result.p_value:.4g}")
+
+
+# Plot Formatting
+
+plt.title("Kaplan-Meier Survival: Sex Groups", fontsize=16)
+plt.xlabel("Time (Days)", fontsize=12)
+plt.ylabel("Readmission-Free Survival Probability", fontsize=12)
+plt.xlim(0, 180)
+plt.ylim(0, 1.05)
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.legend(loc="lower left")
+plt.tight_layout()
+
+# Save Plot
+
+plt.savefig("kaplan_meier_sex.png", dpi=300)
+
+# Display Plot
+
+plt.show()
+
+# Specify Data File Path
+
+csv_file_path = "cox_ph_heart_failure_survival.csv"
+
+# Specify Column Roles and Names
+
+time_column = "time_months"
+event_column = "death"
+
+numeric_covariates = [
+    "age",
+    "bmi",
+    "systolic_bp",
+    "ejection_fraction",
+    "nyha_class"
+]
+
+binary_covariates = [
+    "sex",
+    "diabetes",
+    "smoker",
+    "chronic_kidney_disease",
+    "beta_blocker"
+]
+
+# Load Data
+
+df = pd.read_csv(csv_file_path)
+
+# Data Cleaning
+
+# Convert Boolean and binary variables to 0/1
+
+for col in binary_covariates:
+
+    if df[col].dtype == "object":
+
+        df[col] = (
+            df[col].astype(str)
+            .str.strip()
+            .str.lower()
+            .isin(["true", "1", "yes", "male"])
+            .astype(int)
+        )
+
+# Select model variables
+
+model_df = df[
+    [time_column, event_column]
+    + numeric_covariates
+    + binary_covariates
+]
+
+model_df = model_df.dropna()
+
+# Fit Cox Proportional Hazards Model
+
+cph = CoxPHFitter()
+
+cph.fit(
+    model_df,
+    duration_col=time_column,
+    event_col=event_column
+)
+
+# Results
+
+cph.print_summary(decimals=3)
+
+
+# Plot: Hazard Ratios (Forest Plot)
+
+fig, ax = plt.subplots(figsize=(8, 6))
+
+cph.plot(hazard_ratios=True, ax=ax)
+
+ax.axvline(1, color="gray", linestyle="--")
+
+ax.set_title(
+    "Cox PH Model: Hazard Ratios (95% CI)",
+    fontsize=16
+)
+
+ax.set_ylabel("Covariates", fontsize=12)
+ax.set_xlabel("Hazard Ratio", fontsize=12)
+
+plt.tight_layout()
+
+# Save Plot
+
+plt.savefig("cox_hazard_ratios.png", dpi=300)
+
+# Display Plot
+
+plt.show()
+
+
+# the ending of the run
+print("\nSurvival Analysis Completed!")
 
